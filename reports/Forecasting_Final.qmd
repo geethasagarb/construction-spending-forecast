@@ -1,0 +1,1581 @@
+---
+title: "BANA7050_Final_Project"
+author: "Geetha Sagar Bonthu"
+date: "`r Sys.Date()`"
+format: 
+  html:
+    fig-align: center # Center figure alignment
+    embed-resources: true # Force document to be self-contained (critical!)
+    code-fold: true # Turn on code fold
+    toc: true # Create table of contents
+execute: 
+  warning: false # Turn off warnings
+---
+
+**Dataset Description**
+
+The dataset analyzed in this project is the Total Construction Spending in the United States, sourced from the Federal Reserve Economic Data (FRED). This dataset represents monthly construction expenditures in the United States, measured in millions of dollars, and is seasonally adjusted. The data spans from January 2002 to the most recent available period.
+
+**Source and Publication**
+
+Source: Federal Reserve Economic Data (FRED), St. Louis Fed.
+
+Frequency: Monthly, seasonally adjusted to remove recurring seasonal patterns such as weather-related fluctuations.
+
+Unit of Measurement: Millions of dollars.
+
+This dataset is widely regarded as a key economic indicator, providing insights into infrastructure investments, housing market dynamics, and overall economic activity. It is published regularly and updated to reflect the most current trends in construction spending.
+
+**Data-Generating Process**
+
+In simple terms, construction spending reflects the money spent on building and infrastructure projects across the country. It is influenced by various factors such as economic growth, policy changes, and seasonality.
+
+From a technical perspective, the variation in construction spending is driven by:
+
+Government Policies: Federal and state-level decisions on infrastructure projects, such as highways or public housing, directly affect spending trends.
+
+Weather and Seasonality: Construction activity often slows in winter months and peaks during spring and summer.
+
+External Shocks: Events like the 2008 financial crisis or the COVID-19 pandemic introduce irregular variations in spending patterns.
+
+**Forecasting Challenges**
+
+From a layman’s perspective, predicting construction spending can be tricky because unexpected events, like economic crises, can drastically shift trends. For instance, during a financial downturn, spending may plummet, whereas stimulus packages can cause sudden increases.
+
+Technically, challenges arise due to:
+
+Irregularities: External shocks and sudden policy changes create patterns that are hard to predict.
+
+Long-Term Trends: Structural changes in the economy, like shifts toward more digital or green infrastructure, can alter the baseline spending trends.
+
+Residual Seasonality: Despite seasonal adjustments, there may still be residual patterns in the data.
+
+Overall, while the dataset offers a rich source for analysis and modeling, forecasting construction spending requires careful consideration of external factors and model assumptions.
+
+# **Section I**: **Exploratory Data Analysis(EDA)**
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidyverse)
+library(tsibble)
+library(fpp3)
+library(janitor)
+library(lubridate)
+library(feasts)
+library(gt)
+library(kableExtra)
+library(janitor)
+library(feasts)
+library(patchwork)
+library(slider)
+library(prophet)
+library(fable.prophet)
+library(fable)
+
+data <- read_csv("construction_spending.csv")
+```
+
+```{r warning=FALSE, message=FALSE}
+ggplot(data, aes(x = as.Date(date), y = construction_spending)) +
+  geom_line(color = "blue") +
+  labs(
+    title = "Monthly Construction Spending Over Time",
+    x = "Date",
+    y = "Spending (in millions)"
+  ) +
+  theme_minimal() + theme(panel.grid = element_blank())
+```
+
+**OBSERVATIONS:**
+
+The plot reveals a generally upward trend in construction spending over the years, with notable dips during economic downturns, such as the 2008 financial crisis. Significant growth in recent years may reflect economic recovery and government investment.
+
+```{r}
+# Histogram: Distribution of construction spending
+ggplot(data, aes(x = construction_spending)) +
+  geom_histogram(binwidth = 2000, fill = "skyblue", color = "black") +
+  labs(
+    title = "Distribution of Construction Spending",
+    x = "Spending (in millions)",
+    y = "Frequency"
+  ) +
+  theme_minimal() + theme(panel.grid = element_blank())
+```
+
+**OBSERVATIONS:**
+
+The histogram reveals that most construction spending values are concentrated around \$30,000–\$50,000 million, with fewer occurrences at higher spending levels. The long tail suggests a gradual increase in spending over time.
+
+```{r}
+# Density plot: Smooth distribution visualization
+ggplot(data, aes(x = construction_spending)) +
+  geom_density(fill = "lightblue", alpha = 0.6) +
+  labs(
+    title = "Density Plot of Construction Spending",
+    x = "Spending (in millions)",
+    y = "Density"
+  ) +
+  theme_minimal() + theme(panel.grid = element_blank())
+```
+
+**OBSERVATIONS:**
+
+The density plot confirms a single prominent peak, indicating that spending values are typically concentrated around \$40,000 million, with a tapering distribution toward higher values.
+
+```{r}
+# Extract year and month
+data <- data %>%
+  mutate(year = lubridate::year(date), month = lubridate::month(date, label = TRUE))
+
+# Heatmap
+ggplot(data, aes(x = month, y = factor(year), fill = construction_spending)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c() +
+  labs(
+    title = "Heatmap of Construction Spending",
+    x = "Month",
+    y = "Year",
+    fill = "Spending (in millions)"
+  ) +
+  theme_minimal() +  theme(panel.grid = element_blank())
+```
+
+**OBSERVATIONS**:
+
+1.  Construction spending shows strong seasonality, peaking in warmer months and declining in winter.
+
+2.  Spending levels have increased over time, reflecting long-term growth.
+
+3.  Notable peaks in 2022 and 2024 suggest heightened economic activity or policy-driven initiatives.
+
+4.  Seasonal patterns remain consistent across years.
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(gt)
+
+# Generate summary statistics for construction spending
+summary_table <- data %>%
+  summarise(
+    Observations = n(),
+    Mean = mean(construction_spending, na.rm = TRUE),
+    Median = median(construction_spending, na.rm = TRUE),
+    Min = min(construction_spending, na.rm = TRUE),
+    Max = max(construction_spending, na.rm = TRUE),
+    Range = Max - Min,
+    Std_Dev = sd(construction_spending, na.rm = TRUE)
+  )
+
+# Display results as a formatted table
+summary_table %>%
+  gt() %>%
+  tab_header(
+    title = "Summary Statistics of Construction Spending"
+  ) %>%
+  fmt_number(
+    columns = c(Mean, Median, Min, Max, Range, Std_Dev),
+    decimals = 2
+  ) %>%
+  cols_label(
+    Observations = "Total Observations",
+    Mean = "Mean Spending",
+    Median = "Median Spending",
+    Min = "Minimum Value",
+    Max = "Maximum Value",
+    Range = "Value Range",
+    Std_Dev = "Standard Deviation"
+  )
+
+```
+
+**SUMMARY STATISTICS OF THE DATA:**
+
+-   The dataset includes 275 monthly observations from January 2002 to November 2024.
+
+-   The mean construction spending is approximately \$43,565 million, while the median is \$41,414 million, suggesting a slight right skew in the data.
+
+-   Spending ranges from a minimum of \$16,241 million to a maximum of \$89,189 million, with a range of \$72,948 million.
+
+-   The standard deviation of \$18,121 million reflects significant variability in spending over the time period.
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(gt)
+
+# Calculate IQR and Quartiles
+iqr <- IQR(data$construction_spending, na.rm = TRUE)
+q1 <- quantile(data$construction_spending, 0.25, na.rm = TRUE) # 1st Quartile (Q1)
+q3 <- quantile(data$construction_spending, 0.75, na.rm = TRUE) # 3rd Quartile (Q3)
+
+# Define lower and upper bounds for outliers
+lower_bound <- q1 - 1.5 * iqr
+upper_bound <- q3 + 1.5 * iqr
+
+# Identify outliers
+outliers <- data %>%
+  filter(construction_spending < lower_bound | construction_spending > upper_bound)
+
+# Display outliers in a neatly formatted table
+outliers %>%
+  gt() %>%
+  tab_header(
+    title = md("**Outliers in Construction Spending**")
+  ) %>%
+  fmt_number(
+    columns = construction_spending,
+    decimals = 2,
+    use_seps = TRUE  # Ensures thousands separators for better readability
+  ) %>%
+  cols_label(
+    construction_spending = md("**Spending Value**")
+  ) 
+  
+
+```
+
+The identified outliers in **construction spending** primarily occur in mid-2022 and mid-2024, reflecting potential anomalies or temporary market surges. These values significantly exceed the typical spending range, suggesting possible external economic influences or seasonal fluctuations.
+
+```{r}
+# Load required libraries
+library(ggplot2)
+
+# Simple Box Plot for Outlier Detection
+ggplot(data, aes(y = construction_spending)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red", outlier.size = 3, alpha = 0.6) +
+  labs(
+    title = "Boxplot of Construction Spending (Outliers Highlighted)",
+    y = "Spending (in millions)"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +  theme(panel.grid = element_blank())
+```
+
+**OBSERVATIONS**:
+
+The box plot effectively highlights the distribution of construction spending while marking outliers (red points) that deviate significantly. The interquartile range (IQR) represents the middle 50% of data, while the whiskers extend within 1.5 times the IQR. The outliers in 2022 and 2024 confirm periods of unusually high spending, likely influenced by economic policy shifts or infrastructure investments.
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(zoo)
+
+# Compute 12-month rolling moving average
+data <- data %>%
+  mutate(
+    moving_average = rollmean(construction_spending, k = 12, fill = NA)
+  ) %>%
+  drop_na(moving_average)  # Remove rows with NA values
+
+# Plot original data with moving average
+ggplot(data, aes(x = as.Date(date))) +
+  geom_line(aes(y = construction_spending), color = "blue", alpha = 0.5) +
+  geom_line(aes(y = moving_average), color = "red", linewidth = 1) +  # Fix for ggplot2 3.4.0+
+  labs(
+    title = "Construction Spending with 12-Month Moving Average",
+    x = "Date",
+    y = "Spending (in millions)"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) + theme(panel.grid = element_blank())
+```
+
+**OBSERVATIONS**:
+
+The moving average (red line) smooths fluctuations and highlights the long-term trend in construction spending. The upward trend is evident, though periods of decline (e.g., 2008 financial crisis, early 2020 pandemic impact) reflect economic disruptions. While the moving average effectively captures broad trends, it does not fully account for short-term variations, indicating possible seasonality.
+
+```{r}
+# Compute remainder series
+data <- data %>%
+  mutate(remainder_series = construction_spending - moving_average)
+
+# Plot remainder series
+ggplot(data, aes(x = as.Date(date), y = remainder_series)) +
+  geom_line(color = "blue") +
+  labs(
+    title = "Remainder Series (Original - Moving Average)",
+    x = "Date",
+    y = "Remainder Value"
+  ) +
+  theme_minimal() + theme(panel.grid = element_blank())
+
+```
+
+**OBSERVATIONS**:
+
+Remainder Series The remainder series captures fluctuations not explained by the moving average. The repeating patterns suggest seasonality, while irregular spikes may be linked to economic shocks, policy changes, or temporary disruptions. This confirms that a moving average alone is insufficient to fully explain the time series behavior.
+
+```{r}
+# Load necessary library
+library(forecast)
+# Suppress messages and warnings when loading libraries
+suppressPackageStartupMessages({
+  library(quantmod)
+  library(forecast)
+})
+
+
+# Convert data to time series object
+ts_data <- ts(data$construction_spending, frequency = 12, start = c(2002, 1))
+
+# Perform additive decomposition
+decomposed <- decompose(ts_data, type = "additive")
+
+# Plot decomposition components
+autoplot(decomposed) +
+  labs(
+    title = "Decomposition of Construction Spending",
+    x = "Date",
+    y = "Spending (in millions)"
+  ) + theme(panel.grid = element_blank())
+```
+
+**Assessing Seasonality in the Time Series**
+
+To determine whether the time series contains seasonality, a time series decomposition using an additive model was performed. The decomposition breaks the construction spending data into three components: trend, seasonal, and residuals. The results confirm the presence of strong seasonality, aligned with expectations for the construction industry.
+
+**Decomposition Results**
+
+**Trend Component:** The trend shows a steady **upward trajectory** in construction spending, reflecting long-term growth. Notable dips in the trend correspond to economic downturns, such as the **2008 financial crisis** and the **COVID-19 pandemic in 2020**, emphasizing the influence of external economic factors on spending patterns.
+
+**Seasonal Component:** A clear and consistent **seasonal pattern** is evident, with construction spending **peaking during warmer months** and **declining in colder months**. This indicates predictable cycles driven by weather and industry activity. The **amplitude of the seasonal variation** remains relatively stable over time, reinforcing the strength of seasonality.
+
+**Residual Component:** Residuals capture irregular variations not explained by the trend or seasonality. These irregularities are likely caused by economic shocks, such as government stimulus programs, or temporary disruptions like supply chain issues.
+
+**Strength of Seasonality**
+
+The decomposition reveals **strong and predictable seasonality** in the dataset. Seasonal variations are consistent and stable, reinforcing their importance in understanding the data’s behavior.
+
+**Key Findings**
+
+The time series contains **strong and predictable seasonality** that aligns with industry norms.
+
+The residuals highlight the impact of irregular external factors, such as economic policy changes or unforeseen disruptions.
+
+This seasonality analysis provides valuable insights into the recurring patterns in construction spending.
+
+**Forecasting Implications**
+
+The presence of strong seasonality indicates that forecasting models applied to this dataset must explicitly account for these recurring patterns. Models such as **Seasonal ARIMA or Prophet** are recommended for capturing these trends effectively.
+
+This analysis confirms that seasonality plays a significant role in construction spending, making it a crucial factor to incorporate in future modeling and decision-making processes.
+
+```{r}
+# Load Libraries
+library(tidyverse)
+library(tsibble)
+library(lubridate)
+library(tidyr)
+library(fable)
+library(fabletools)
+library(feasts)
+library(ggplot2)
+
+#─────────────────────────────  
+# Section 1 - Train and Test Splits
+#─────────────────────────────  
+
+# Read the CSV file and convert to a tsibble 
+construction_spending <- read_csv("construction_spending.csv", 
+  col_types = cols(
+    date = col_date(format = "%Y-%m-%d"),
+    construction_spending = col_double()
+  )
+) %>%
+  mutate(yearmonth = yearmonth(date)) %>%  # Generate a year-month index
+  arrange(date) %>%
+  as_tsibble(index = yearmonth)
+
+# Split into training (80%) and test (20%) sets
+n <- nrow(construction_spending)
+train_data <- construction_spending %>% slice(1:floor(n * 0.8))
+test_data  <- construction_spending %>% slice((floor(n * 0.8) + 1):n)
+
+# Complete the test set’s time index in case future periods are missing
+test_data_complete <- test_data %>% 
+  complete(yearmonth = seq(min(yearmonth), max(yearmonth), by = 1)) %>%
+  as_tsibble(index = yearmonth)
+
+```
+
+```{r}
+# 3. Visualization: Plot Train vs. Test Split
+ggplot() +
+  geom_line(data = train_data, aes(x = yearmonth, y = construction_spending), color = "blue", size = 1) +  
+  geom_line(data = test_data, aes(x = yearmonth, y = construction_spending), color = "red", size = 1) +    
+  labs(
+    title = "Train vs. Test Split (80/20)",
+    subtitle = "Blue = Training Data, Red = Test Data",
+    x = "Year-Month",
+    y = "Construction Spending"
+  ) +
+  theme_bw(base_size = 14) +
+  theme(legend.position = "bottom") 
+```
+
+To evaluate our time-series models, we split the data into training (80%) and test (20%) sets. The training set was used to fit the models, while the test set was reserved for out-of-sample validation. A visualization of the splits shows that the test set is representative of the training set, with similar seasonal patterns and trends. This ensures that our evaluation metrics are meaningful and reflect real-world performance.
+
+# **Section 2 - ARIMA Modeling**
+
+```{r}
+# Load required libraries
+library(tsibble)  # For time series handling
+library(slider)   # For rolling functions
+library(ggplot2)  # For visualization
+library(dplyr)    # For mutate()
+library(fpp3)
+library(forecast)
+library(tseries)
+
+# Load the dataset
+construction_spending <- read.csv("construction_spending.csv") %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d"))
+```
+
+```{r}
+construction_ts <- construction_spending %>%
+  mutate(date = yearmonth(date)) %>%
+  as_tsibble(index = date)
+
+# Compute rolling mean and rolling standard deviation
+construction_ts <- construction_ts %>%
+  mutate(
+    rolling_mean = slide_dbl(construction_spending, mean, .before = 12),
+    rolling_sd   = slide_dbl(construction_spending, sd, .before = 12)
+  )
+
+# Plot rolling mean and standard deviation
+ggplot(construction_ts, aes(x = date)) +
+  geom_line(aes(y = construction_spending, color = "Actual Spending")) +
+  geom_line(aes(y = rolling_mean, color = "Rolling Mean"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = rolling_sd, color = "Rolling SD"), size = 1.2, linetype = "dotted") +
+  labs(title = "Rolling Mean and Standard Deviation of Construction Spending",
+       x = "Year", y = "Spending",
+       color = "Legend") +
+  theme_minimal() +
+  scale_color_manual(values = c("Actual Spending" = "black",
+                                 "Rolling Mean" = "red",
+                                 "Rolling SD" = "blue")) + theme(panel.grid = element_blank())
+```
+
+**Observations on the Rolling Mean and Standard Deviation Plot of Construction Spending**
+
+The **rolling mean and standard deviation analysis** is a crucial step in assessing whether the time series of construction spending exhibits stationarity.
+
+1.  **Trend in the Rolling Mean:**
+    -   The rolling mean (depicted in red) shows **significant upward movement**, suggesting that the data is **not mean stationary**.
+    -   This implies that the overall spending pattern has increased over time, reflecting **economic growth and rising infrastructure investments**.
+    -   The fluctuations observed in the rolling mean also indicate periodic seasonal effects.
+2.  **Trend in the Rolling Standard Deviation:**
+    -   The rolling standard deviation (blue dotted line) is **not constant over time**.
+    -   The increasing variation suggests that the data is **variance non-stationary**, meaning that spending fluctuations have become **more pronounced in recent years**.
+    -   This can be attributed to factors such as **economic cycles, policy-driven funding changes, and market volatility**.
+3.  **Non-Stationary Characteristics:**
+    -   Since both the rolling mean and standard deviation exhibit trends rather than remaining constant, the data **fails the criteria for stationarity**.
+    -   Transformations such as **log transformation or differencing** will be required to stabilize variance and achieve stationarity.
+4.  **Business and Economic Implications:**
+    -   The **increase in variance and spending over time** suggests a **growing market**, likely influenced by **government policies, urban development projects, and financial investments in infrastructure**.
+    -   However, **larger fluctuations in recent years** may pose a risk, indicating **increased uncertainty** in construction investments.
+
+```{r}
+#############################################
+# CONTINUATION: ARIMA MODELING ON train_data #
+#############################################
+
+# Load additional libraries if not already loaded
+library(fable)
+library(feasts)
+library(fabletools)
+library(forecast)  # for BoxCox.lambda()
+library(patchwork) # for combining plots
+```
+
+```{r}
+# Interpretation:
+# - p-value = 0.01: Reject the null hypothesis of stationarity.
+#   This confirms that the original series is non-stationary and requires transformation.
+
+# Load necessary library
+library(gt)
+
+# Perform KPSS Test
+kpss_original <- kpss.test(pull(train_data, construction_spending))
+
+# Create a table for the KPSS test results
+kpss_table <- tibble(
+  Test = "KPSS Test for Level Stationarity",
+  `Test Statistic` = kpss_original$statistic,
+  `Truncation Lag` = kpss_original$parameter,
+  `P-Value` = kpss_original$p.value
+)
+
+# Display table using gt
+kpss_table %>%
+  gt() %>%
+  tab_header(title = "KPSS Test Results for Stationarity") %>%
+  fmt_number(columns = c(`Test Statistic`, `P-Value`), decimals = 4)
+
+
+```
+
+**KPSS Test for Stationarity**
+
+The **KPSS test** was conducted to assess whether the original **construction spending** time series is **stationary**. - **p-value** = 0.01295
+
+Since the **p-value is below 0.05**, we **reject the null hypothesis** of stationarity. This confirms that the **time series is non-stationary**, indicating the need for **transformations** such as **differencing** or **Box-Cox transformation** to stabilize variance and induce stationarity before ARIMA modeling.
+
+```{r}
+#############################################
+# Transformation Steps with Plots on train_data
+#############################################
+
+# Step 1: Box-Cox Transformation on the Training Set
+lambda <- BoxCox.lambda(train_data$construction_spending)
+
+train_data_boxcox <- train_data %>%
+  mutate(boxcox_spending = BoxCox(construction_spending, lambda))
+
+# Plot: Original vs. Box-Cox Transformed Series
+p_boxcox <- train_data_boxcox %>%
+  ggplot(aes(x = yearmonth)) +
+  geom_line(aes(y = construction_spending, color = "Original")) +
+  geom_line(aes(y = boxcox_spending, color = "Box-Cox Transformed")) +
+  labs(title = "Original vs. Box-Cox Transformed Series",
+       x = "Year-Month", y = "Spending") +
+  scale_color_manual(values = c("Original" = "black", "Box-Cox Transformed" = "blue")) +
+  theme_minimal()
+print(p_boxcox)
+```
+
+**Box-Cox Transformation Analysis**
+
+A **Box-Cox transformation** was applied to the **construction spending** series to stabilize variance. The results indicate: - The original series exhibits **high variability**, with noticeable fluctuations in spending. - The **Box-Cox transformation** effectively **rescaled the data**, reducing heteroskedasticity. - The transformation is especially useful since the estimated **lambda value** suggests a near **log-like** transformation.
+
+```{r}
+#─────────────────────────────  
+# Step 2: Seasonal Differencing (lag = 12 for monthly data)
+train_data_boxcox <- train_data_boxcox %>%
+  mutate(boxcox_seasdiff = difference(boxcox_spending, lag = 12))
+
+# Plot: Seasonally Differenced Series
+p_seasdiff <- train_data_boxcox %>%
+  ggplot(aes(x = yearmonth)) +
+  geom_line(aes(y = boxcox_seasdiff), color = "darkgreen") +
+  labs(title = "Seasonally Differenced Series (lag = 12)",
+       x = "Year-Month", y = "Differenced Spending") +
+  theme_minimal()
+print(p_seasdiff)
+```
+
+**Seasonal Differencing Analysis**
+
+A **seasonal differencing transformation** (lag = 12) was applied to account for annual periodic patterns in the construction spending data. \### Key Observations: - The **large dip around 2008–2009** reflects the economic downturn's impact on spending. - The y-axis values now **fluctuate within a smaller range**, indicating that **seasonality has been removed**. - While seasonal effects are reduced, additional **first-order differencing** may still be required to achieve complete stationarity.
+
+```{r}
+#─────────────────────────────  
+# Step 3: First-Order Differencing to Remove Remaining Trend
+train_data_boxcox <- train_data_boxcox %>%
+  mutate(boxcox_finaldiff = difference(boxcox_seasdiff, lag = 1)) %>%
+  drop_na()  # Remove NAs resulting from differencing
+
+# Plot: Final Differenced Series (After Seasonal Differencing)
+p_finaldiff <- train_data_boxcox %>%
+  ggplot(aes(x = yearmonth)) +
+  geom_line(aes(y = boxcox_finaldiff), color = "red") +
+  labs(title = "First-Order Differenced Series (After Seasonal Differencing)",
+       x = "Year-Month", y = "Final Differenced Spending") +
+  theme_minimal()
+print(p_finaldiff)
+
+```
+
+**First-Order Differencing Analysis**
+
+A **first-order differencing transformation** (lag = 1) was applied after seasonal differencing to remove any remaining trend in the construction spending data. - The series now **fluctuates around zero**, with values ranging between **-0.25 and +0.5**. - There is **no obvious upward or downward trend**, suggesting that the series is now **stationary**. - This transformation ensures that the data meets the stationarity requirement for ARIMA modeling.
+
+```{r}
+# Load necessary libraries
+library(tseries)
+library(tibble)
+library(gt)
+
+# Perform KPSS Test on the final transformed series
+kpss_final <- kpss.test(pull(train_data_boxcox, boxcox_finaldiff))
+
+# Create a table with the KPSS test results
+kpss_table_final <- tibble(
+  Test = "KPSS Test for Final Transformed Series",
+  `Test Statistic` = kpss_final$statistic,
+  `Truncation Lag` = kpss_final$parameter,
+  `P-Value` = kpss_final$p.value
+)
+
+# Display table using gt
+kpss_table_final %>%
+  gt() %>%
+  tab_header(title = "KPSS Test Results for Final Transformed Series") %>%
+  fmt_number(columns = c(`Test Statistic`, `P-Value`), decimals = 4)
+
+```
+
+**KPSS Test for Stationarity**
+
+A **KPSS test** was conducted on the final transformed series to verify its stationarity. - **p-value** = 0.1 - Since **p-value \> 0.05**, we **fail to reject the null hypothesis** of stationarity. - This confirms that the **final differenced series is likely stationary**, meeting the assumptions required for ARIMA modeling. - The warning regarding "p-value greater than printed p-value" is a standard output in KPSS tests and can be ignored.
+
+```{r}
+library(patchwork)
+
+#############################################
+# 6. ACF/PACF Analysis on the Final Transformed Series
+#############################################
+
+# Compute ACF and PACF for the fully transformed series
+acf_data <- ACF(train_data_boxcox, boxcox_finaldiff)
+pacf_data <- PACF(train_data_boxcox, boxcox_finaldiff)
+
+# Plot ACF and PACF
+acf_plot <- autoplot(acf_data) +
+  labs(title = "ACF of BoxCox + Seasonal & First-Order Differenced Series")
+pacf_plot <- autoplot(pacf_data) +
+  labs(title = "PACF of BoxCox + Seasonal & First-Order Differenced Series")
+
+# Display both plots
+acf_plot / pacf_plot
+
+```
+
+**ACF and PACF Analysis**
+
+The **ACF plot** exhibits a strong spike at **lag 1**, with subsequent values declining and mostly within confidence bounds. This suggests a moving average (MA) component in the data.
+
+The **PACF plot** also shows a significant spike at **lag 1**, indicating the presence of an autoregressive (AR) component. Subsequent lags are small and within the confidence limits.
+
+Additionally, any notable **seasonal spikes at lag 12** suggest the need for seasonal components in the model. Given this structure, an **ARIMA(1,1,1)(1,1,1)\[12\]** model appears to be a reasonable choice.
+
+```{r}
+train_model <- train_data %>%
+  model(
+    ARIMA(construction_spending ~ pdq(1,1,1) + PDQ(1,1,1))
+  )
+report(train_model)
+```
+
+**ARIMA Model Selection and Evaluation**
+
+The selected **ARIMA(1,1,1)(1,1,1)\[12\]** model effectively captures both non-seasonal and seasonal dependencies in the time series.
+
+**Model Interpretation**
+
+-   **Non-seasonal AR(1) = 0.7073**: Indicates strong autoregressive dependence on the previous value.
+-   **Non-seasonal MA(1) = -0.3422**: Suggests an adjustment based on the previous error term.
+-   **Seasonal AR(1) = -0.9901**: Strong seasonal autoregressive behavior, meaning past seasonal values heavily influence the current value.
+-   **Seasonal MA(1) = 0.9594**: Almost completely negates seasonal shocks from the prior period.
+
+**Model Fit**
+
+-   **Sigma² (Variance of Residuals) = 641,955**: Indicates the variance of the residuals, suggesting moderate error magnitude.
+-   **Log-likelihood = -1678.12**: Used for model comparison; higher values indicate a better fit.
+-   **AIC = 3366.24, AICc = 3366.54, BIC = 3382.9**: The relatively close values suggest the model is balanced in terms of complexity and fit.
+
+This model captures both short-term dependencies and seasonal patterns, making it a strong candidate for forecasting. However, residual diagnostics should still be assessed to confirm its adequacy.
+
+```{r}
+library(forecast)
+auto_model <- auto.arima(train_data$construction_spending, seasonal = TRUE,
+                         stepwise = FALSE, approximation = FALSE)
+summary(auto_model)
+
+```
+
+**Comparison of Manual ARIMA vs. Auto ARIMA Model**
+
+**Auto ARIMA Model: ARIMA(0,1,4)**
+
+-   **Coefficients:** The model includes **four** moving average (MA) terms but lacks explicit seasonal components.
+-   **AIC/BIC Comparison:**
+    -   **Auto ARIMA:** AIC = 3976.58, BIC = 3993.52
+    -   **Manual ARIMA(1,1,1)(1,1,1)\[12\]:** AIC = 3366.24, BIC = 3382.9
+    -   The manual ARIMA model has **lower AIC and BIC**, indicating a better balance between model fit and complexity.
+-   **Residual Analysis:**
+    -   The manual ARIMA model explicitly accounts for **seasonality**, likely leading to residuals that resemble white noise more closely.
+
+**Why Choose the Manual ARIMA(1,1,1)(1,1,1)\[12\]?**
+
+-   **Seasonal Components Captured:** Auto ARIMA does not include seasonal AR or MA terms, making it less suited for monthly data with yearly cycles.
+-   **Lower Information Criteria (AIC/BIC):** The manual model outperforms auto ARIMA in model selection criteria, suggesting better predictive performance.
+-   **Better Forecasting Capability:** The inclusion of seasonal terms enhances the model's ability to forecast cyclical patterns in the data.
+
+Overall, the **manual ARIMA(1,1,1)(1,1,1)\[12\]** is preferred due to its superior fit, inclusion of seasonal terms, and better residual behavior, making it a more robust choice for forecasting.
+
+```{r}
+# Example: Forecast on test_data (or new_data)
+fc <- train_model %>% forecast(new_data = test_data_complete)
+
+# Plot forecast vs. actuals
+autoplot(fc, train_data) +
+  autolayer(test_data_complete, construction_spending, color = "red") +
+  labs(title = "ARIMA(1,1,1)(1,1,1)[12] Forecast vs. Test Data",
+       y = "Construction Spending") +
+  theme_minimal()
+```
+
+**ARIMA(1,1,1)(1,1,1)\[12\] Forecast vs. Test Data**
+
+-   The forecasted values from the **ARIMA(1,1,1)(1,1,1)\[12\]** model are compared against the actual test data.
+-   **Trend Capture:** The model effectively captures the seasonality and trend observed in the historical data.
+-   **Forecast Accuracy:** If the red actual values closely follow the forecast, the model performs well.
+-   **Uncertainty Representation:** Prediction intervals (shaded areas) indicate forecast uncertainty, widening as the horizon extends.
+-   **Potential Issues:** Deviations between actuals and forecasts may indicate underfitting or external economic factors affecting spending.
+
+```{r}
+accuracy(fc, test_data_complete)
+```
+
+**Forecast Accuracy Assessment**
+
+The relatively high **MAPE (\~14.5%)** suggests that the model exhibits moderate forecast accuracy but may struggle with capturing certain fluctuations in the data. The **high ACF1 value (0.867)** indicates some residual autocorrelation, suggesting that the model could still have some room for refinement.
+
+```{r}
+# Example for a fable model called `train_model`
+library(dplyr)
+library(fabletools)
+
+# Extract residuals as numeric
+res_vec <- train_model %>%
+  augment() %>%
+  pull(.resid) %>%
+  as.numeric()
+# Suppose your data starts in 2002, month 1
+res_ts <- ts(res_vec, start = c(2002, 1), frequency = 12)
+library(forecast)
+ggtsdisplay(res_ts, plot.type = "histogram", main = "Residuals Diagnostic")
+```
+
+**Residual Diagnostics**
+
+-   **Residual Time Series Plot (Top Panel):** The residuals appear to fluctuate randomly around zero, suggesting that the ARIMA model captures most of the systematic patterns in the data. However, there are some spikes, indicating occasional volatility.
+
+-   **Autocorrelation Function (ACF) Plot (Bottom Left):** Most autocorrelation values fall within the blue confidence bounds, meaning residuals exhibit minimal autocorrelation. This suggests that the model has adequately accounted for any patterns in the data.
+
+-   **Histogram of Residuals with Density Plot (Bottom Right):** The residuals exhibit a roughly normal distribution, though there are slight deviations in the tails. The density curve follows the histogram closely, indicating that the residuals are approximately Gaussian.
+
+Overall, the residual diagnostics suggest that the ARIMA(1,1,1)(1,1,1)\[12\] model provides a well-fitted representation of the data, with no significant autocorrelation remaining. However, slight deviations in the residuals suggest that minor model improvements could be explored.
+
+```{r}
+library(fabletools)
+library(dplyr)
+library(forecast)
+
+# Extract residuals from your fable model (assumed to be named train_model)
+res_vec <- train_model %>% 
+  augment() %>% 
+  pull(.resid) %>% 
+  as.numeric()
+
+# Convert to a univariate ts object (adjust start and frequency as needed)
+res_ts <- ts(res_vec, start = c(2002, 1), frequency = 12)
+
+# Now perform the Ljung-Box test on the ts object
+ljung_result <- Box.test(res_ts, lag = 12, type = "Ljung-Box")
+print(ljung_result)
+
+```
+
+**Ljung-Box Test for Residual Autocorrelation**
+
+-   Since the **p-value (0.6575) is greater than 0.05**, we **fail to reject the null hypothesis**, indicating that the residuals exhibit **no significant autocorrelation**.
+-   The residuals behave **like white noise**, confirming that the **ARIMA(1,1,1)(1,1,1)\[12\]** model is **well-specified**.
+-   This suggests that the model effectively captures the underlying structure of the data and does not leave any systematic patterns unaccounted for.
+
+# **Section 3 - Meta Prophet Model**
+
+Prophet, developed by Facebook, is a robust time-series forecasting model designed to effectively handle **trend and seasonality components**. It is particularly well-suited for datasets with structural trend changes, as it automatically detects **changepoints** where shifts in trend occur.
+
+The model offers flexibility in incorporating **seasonal variations, holiday effects, and external regressors**, making it highly adaptable to real-world business forecasting. Additionally, Prophet is **resilient to missing data and outliers**, ensuring stable and reliable predictions across various time-series applications.
+
+```{r warning=FALSE, message=FALSE}
+# Load required libraries
+library(tidyverse)      # Data manipulation (dplyr, ggplot2, etc.)
+library(tsibble)        # Handling time series data
+library(fable)          # Forecasting models
+library(fable.prophet)  # Prophet model in fable
+library(lubridate)      # Date handling
+library(gt)            # Creating tables
+library(patchwork)      # Combining multiple plots
+library(feasts)         # Time series decomposition and visualization
+
+# Read the CSV file and convert to a tsibble
+construction_spending <- read_csv("construction_spending.csv", 
+  col_types = cols(
+    date = col_date(format = "%Y-%m-%d"),  # Ensure 'date' is in Date format
+    construction_spending = col_double()   # Ensure 'construction_spending' is numeric
+  )
+) %>%
+  mutate(yearmonth = yearmonth(date)) %>%  # Extract Year-Month index
+  arrange(date) %>%                        # Ensure data is sorted by date
+  as_tsibble(index = yearmonth)            # Convert to tsibble for fable models
+
+# Ensure 'construction_spending' is numeric (as a safety check)
+if (!is.numeric(construction_spending$construction_spending)) {  
+  construction_spending$construction_spending <- as.numeric(construction_spending$construction_spending)
+}
+```
+
+```{r warning=FALSE, message=FALSE}
+# Fit a Prophet model with yearly seasonality (multiplicative)
+prophet_model <- construction_spending %>%
+  model(
+    Prophet = fable.prophet::prophet(
+      construction_spending ~ season(period = "year", type = "multiplicative")
+    )
+  )
+
+# Summarize the fitted model
+glance(prophet_model)  # General model summary
+tidy(prophet_model)    # Model coefficients
+augment(prophet_model)
+```
+
+The Prophet model was trained with **multiplicative yearly seasonality** to effectively capture **seasonal fluctuations** in construction spending. This choice ensures that **seasonal variations scale with the overall trend**, allowing the model to dynamically adjust for **monthly and yearly patterns** while detecting **long-term trends** in spending behavior.
+
+The **model summary** provides key statistical insights into the fitted model: - The **base growth rate** and **trend offset** describe the underlying **long-term trend** in construction spending. - The **seasonality components** (e.g., `year_s1`, `year_c1`) are Fourier-transformed features that help the model **identify repeating seasonal patterns**. - These coefficients quantify how different **seasonal patterns influence the overall forecast**, allowing the model to make accurate predictions based on historical seasonality.
+
+```{r}
+# Generate forecasts for the next 12 months
+forecast_data <- prophet_model %>%
+  forecast(h = "12 months") 
+
+# Plot the forecast
+forecast_data %>%
+  autoplot(construction_spending) +
+  ggtitle("Prophet Model Forecast for Construction Spending") +
+  xlab("Date") +
+  ylab("Construction Spending")+
+  theme_minimal()+
+  theme(panel.grid = element_blank())
+
+# Convert forecast data into a well-formatted table
+forecast_data %>%
+  as_tibble() %>%
+  select(Model = .model, Date = yearmonth, Forecast = .mean) %>%  # Rename columns for clarity
+  mutate(Forecast = round(Forecast, 2)) %>%  # Round forecast values
+  gt() %>%
+  tab_header(
+    title = md("**📈 Prophet Model Forecast for Construction Spending**"),
+    subtitle = md("Forecasted values for the next 12 months")
+  ) %>%
+  cols_label(
+    Model = "Model Type",
+    Date = "Forecast Date",
+    Forecast = "Predicted Spending ($)"
+  ) %>%
+  fmt_number(columns = Forecast, decimals = 2) %>%  # Format numbers with 2 decimal places
+  tab_options(
+    table.border.top.color = "black",
+    table.border.bottom.color = "black",
+    heading.title.font.size = 16,
+    heading.subtitle.font.size = 12,
+    column_labels.font.weight = "bold",
+    row.striping.background_color = "lightgrey",  # Alternate row colors
+    table_body.border.top.color = "grey80"
+  ) %>%
+  data_color(
+    columns = Forecast, 
+    colors = scales::col_numeric(
+      palette = c("lightblue", "blue"), domain = NULL
+    )
+  ) 
+```
+
+The forecasted values for the next **12 months** indicate a **clear upward trend** in construction spending, consistent with historical growth patterns. The **confidence intervals (shaded regions)** highlight the uncertainty in predictions, with wider bands further into the future, reflecting **increased forecast uncertainty**. The **80% and 95% confidence bands** provide a statistical estimate of the likely range of future values.
+
+The tabular representation of forecasted values enhances interpretability by presenting **monthly predictions in a structured format**. The spending projections show a **steady increase**, reinforcing the **continuation of past trends**. This structured presentation complements the graphical visualization, making it easier to analyze **expected spending patterns**.
+
+**Decomposing and Visualizing Time-Series Components**
+
+```{r warning=FALSE, message=FALSE}
+# Extract time-series components (trend, seasonality, residuals)
+components <- prophet_model %>%
+  components()
+
+# Enhanced visualization of decomposed components
+autoplot(components) +
+  ggtitle("Decomposition of Time-Series Components") +
+  xlab("Date") +
+  ylab("Construction Spending") +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.major = element_line(color = "grey85"),
+    panel.grid.minor = element_blank()
+  )
+
+```
+
+The decomposition plot provides a **detailed breakdown** of construction spending into its fundamental components: **trend, seasonality, and residuals**.
+
+-   **Trend Component**: Displays a **gradual upward trajectory** over time, with noticeable fluctuations. This suggests **consistent long-term growth** in construction spending, likely influenced by economic cycles and industry demand.
+-   **Seasonality Component**: Exhibits **regular periodic variations**, confirming the presence of **recurring seasonal patterns** in the data. This reinforces the appropriateness of including **multiplicative seasonality** in the forecasting model.
+-   **Residuals**: Represent the **unexplained variations** not captured by the trend and seasonality components. They appear to be **randomly distributed**, indicating that the model has effectively accounted for the major systematic patterns in the data. However, some periods may show **higher volatility**, suggesting potential external influences (e.g., economic shocks, policy changes).
+
+This decomposition analysis **validates the structure of the Prophet model**, confirming that both **trend and seasonal components** play a significant role in explaining construction spending patterns.
+
+```{r warning=FALSE, message=FALSE}
+# Extract detected changepoints
+detected_changepoints <- prophet_model %>%
+  glance() %>%
+  select(changepoints) %>%
+  unnest(changepoints) %>%
+  pull(changepoints) %>%
+  as.Date()  # Convert to Date format
+
+#To look at detected changepoints
+#detected_changepoints
+# Plot actual data with detected changepoints
+ggplot() +
+  geom_line(data = construction_spending, aes(x = yearmonth, y = construction_spending), 
+            color = "#1f77b4", size = 1.2) +  # Actual data
+  geom_vline(xintercept = detected_changepoints, 
+             color = "red", linetype = "dashed") +  # Changepoints
+  ggtitle("Detected Changepoints in Trend") +
+  xlab("Date") +
+  ylab("Construction Spending") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.major = element_line(color = "grey85"),
+    panel.grid.minor = element_blank() 
+  )
+
+```
+
+The **red dashed vertical lines** highlight the **changepoints** where the model detected significant shifts in trend. These changepoints suggest periods where **construction spending experienced structural changes**, likely due to **economic shifts, policy implementations, or external market conditions**.
+
+-   **Changepoint Distribution**: The changepoints are **evenly spread** across the timeline, indicating that the model is **responsive to trend variations over time**.
+-   **Potential Economic Drivers**: The detected dates may align with **recession periods, infrastructure investments, or regulatory changes**, which could have influenced spending trends.
+-   **Model Refinement**: If too many changepoints are detected, the model may be **overfitting short-term fluctuations**. This can be controlled by **reducing `n_changepoints`** or **increasing `changepoint_prior_scale`** to allow smoother transitions.
+-   **Alternative Approaches**: If critical changepoints are missing, **increasing `n_changepoints` or reducing `changepoint_prior_scale`** can help the model detect more trend shifts. Additionally, adjusting `changepoint_range` can **limit the period where changepoints are considered**, refining the model's ability to detect meaningful shifts.
+
+This changepoint analysis ensures that the model **effectively captures structural shifts** in construction spending while maintaining a balance between **flexibility and robustness** in trend estimation.
+
+```{r warning=FALSE, message=FALSE}
+# Refit Prophet model with optimized changepoint parameters
+prophet_model_adj <- construction_spending %>%
+  model(
+    Prophet = prophet(
+      construction_spending ~ growth("linear", n_changepoints = 10) +  # Optimized changepoints
+        season(period = "year", type = "multiplicative", order = 6)   # Adjusted seasonality
+    )
+  )
+
+# Extract and print detected changepoints
+detected_changepoints <- prophet_model_adj %>%
+  glance() %>%
+  select(changepoints) %>%
+  unnest(changepoints) %>%
+  pull(changepoints) %>%
+  as.Date()
+
+print(detected_changepoints)
+
+# Generate forecasts for the optimized model
+forecast_linear <- prophet_model_adj %>%
+  forecast(h = "12 months")
+
+
+# Plot actual data with detected changepoints
+ggplot() +
+  geom_line(data = construction_spending, aes(x = yearmonth, y = construction_spending), 
+            color = "#1f77b4", size = 1.2) +  # Actual data
+  geom_vline(xintercept = as.numeric(detected_changepoints), 
+             color = "red", linetype = "dashed", size = 1) +  # Changepoints
+  ggtitle("Detected Changepoints in Trend") +
+  xlab("Date") +
+  ylab("Construction Spending ($)") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.major = element_line(color = "grey85"),
+    panel.grid.minor = element_blank()
+  ) 
+```
+
+Observations:
+
+1.  **Trend Analysis**
+
+-   The **linear growth model** assumes that construction spending will continue increasing indefinitely. This trend suggests that spending is on a **steady upward trajectory** without any constraints.
+-   The forecasted values exhibit **consistent seasonality** with periodic fluctuations, aligning with historical patterns.
+
+2.  **Changepoints and Adjustments**
+
+-   The model identifies significant **changepoints** (listed below) where the trend underwent structural shifts:
+-   **2003-11-01, 2005-09-01, 2007-07-01, 2009-05-01, 2011-02-01, 2012-12-01, 2014-10-01, 2016-08-01, 2018-06-01, 2020-04-01.**
+-   These changepoints align with **economic cycles, policy changes, or market conditions** that influenced construction spending.
+-   The **new changepoint locations** in the adjusted model provide a **smoother trend** and avoid excessive variance, ensuring the model is not **overfitting** to minor fluctuations.
+
+3.  **Forecast Uncertainty**
+
+-   The **blue shaded regions** indicate **prediction intervals (80% and 95%)**, representing uncertainty in future projections.
+-   As we move further into the future, the confidence intervals **widen**, reflecting **greater uncertainty** in long-term forecasts.
+
+4.  **Potential Limitations**
+
+-   The assumption of **unbounded linear growth** may not be entirely realistic, as construction spending is subject to **economic downturns, resource constraints, and policy changes**.
+-   A **logistic growth model** with a saturation point may be more appropriate if we expect spending to **stabilize** at a certain level.
+
+The **linear growth model provides a strong baseline forecast**, capturing historical patterns and growth trends. However, if real-world constraints suggest a saturation point, a **logistic growth model** should be explored for a more realistic long-term forecast.
+
+```{r warning=FALSE, message=FALSE}
+# Define cap and floor values (20% above max, 20% below min)
+cap_value <- quantile(construction_spending$construction_spending, 0.99) * 1.2  
+floor_value <- quantile(construction_spending$construction_spending, 0.01) * 0.8  
+
+# Add cap and floor values to the dataset
+construction_spending <- construction_spending %>%
+  mutate(cap = cap_value, floor = floor_value)
+
+# Create a future dataset for 12 months ahead and apply cap & floor
+future_data <- new_data(construction_spending, h = "12 months") %>%
+  mutate(cap = cap_value, floor = floor_value)
+
+# Fit Prophet model using logistic growth
+prophet_model_logistic <- construction_spending %>%
+  model(
+    Prophet = prophet(
+      construction_spending ~ growth("logistic", cap = cap, floor = floor) + 
+        season(period = "year", type = "multiplicative", order = 6)  # Ensure seasonality order
+    )
+  )
+
+glance(prophet_model_logistic)
+# Generate forecast
+forecast_logistic <- prophet_model_logistic %>%
+  forecast(new_data = future_data)
+
+# Plot Logistic Growth Model
+autoplot(forecast_logistic, construction_spending) +
+  ggtitle("Prophet Model with Logistic Growth") +
+  xlab("Date") +
+  ylab("Construction Spending ($)") +
+  theme_minimal() +
+  theme(panel.grid = element_blank())
+
+```
+
+Observations on the Prophet Model with Logistic Growth
+
+1.  **Model Fit and Performance**
+
+-   The **Prophet model with logistic growth** has been successfully applied to forecast construction spending, incorporating constraints on growth.
+-   The **sigma value of 12,919.9** indicates forecast uncertainty, with a lower sigma generally indicating a better model fit.
+-   **Detected changepoints** highlight structural shifts in the trend, likely caused by economic cycles, policy interventions, or market fluctuations.
+
+2.  **Interpretation of the Forecast Plot**
+
+-   The **black line represents actual historical construction spending**, demonstrating an upward trend with seasonal patterns.
+-   The **forecasted values (shaded region)** provide predictions with **80% and 95% confidence intervals**, reflecting increasing uncertainty over time.
+-   The logistic growth assumption **imposes an upper boundary (saturation limit), preventing unrealistic exponential growth projections**.
+
+3.  **Why Logistic Growth?**
+
+-   The **logistic model is more realistic** when a natural limit exists, such as resource constraints, government budgets, or market saturation.
+-   Unlike **linear models**, which assume indefinite growth, **logistic models capture diminishing returns**, making them better suited for constrained economic variables.
+
+4.  **Potential Improvements**
+
+-   If the model **overfits or underfits**, adjustments to **changepoint detection** (e.g., modifying `n_changepoints` or `changepoint_prior_scale`) can help refine trend flexibility.
+-   The **wide confidence intervals** suggest **forecast uncertainty**, which could be mitigated by introducing **external regressors** (e.g., interest rates, economic growth indicators).
+-   Additional **feature engineering**, such as adjusting seasonality or incorporating **holiday effects**, may improve long-term predictive performance.
+
+```{r warning=FALSE, message=FALSE}
+# Fit a Linear Growth Model
+prophet_model_linear <- construction_spending %>%
+  model(
+    Prophet = prophet(
+      construction_spending ~ growth("linear") + 
+        season(period = "year", type = "multiplicative")
+    )
+  )
+
+# Generate forecasts
+forecast_linear <- prophet_model_linear %>%
+  forecast(h = "12 months")
+
+# Plot Linear Growth Model
+autoplot(forecast_linear, construction_spending) +
+  ggtitle(" Prophet Model with Linear Growth") +
+  xlab("Date") +
+  ylab("Construction Spending ($)") +
+  theme_minimal() +
+  theme(panel.grid = element_blank())
+
+```
+
+**Observations on the Prophet Model with Linear Growth:**
+
+1.  **Model Fit and Performance**
+
+-   The **linear growth model** assumes a steady, uninterrupted increase in construction spending over time.
+-   The forecast follows a **continuous upward trajectory**, suggesting persistent growth without constraints.
+-   The **confidence intervals (shaded region)** provide a range for uncertainty, capturing potential variations in future spending.
+
+2.  **Interpretation of the Forecast Plot**
+
+-   The **black line represents historical construction spending**, showing periodic seasonal fluctuations alongside a clear long-term upward trend.
+-   The forecast predicts **continued growth** without an imposed upper boundary, making it effective for short-term forecasting but potentially unrealistic for long-term trends.
+-   The **80% and 95% confidence intervals** widen over time, reflecting increasing uncertainty as the forecast horizon extends.
+
+3.  **Why Linear Growth?**
+
+-   A **linear growth model is appropriate** when no natural constraints or saturation limits are expected in the data.
+-   Unlike the **logistic model**, which accounts for **potential slowdowns**, linear growth assumes **indefinite expansion**, which may not fully reflect **real-world economic limitations** such as recessions, resource constraints, or policy changes.
+
+4.  **Potential Improvements**
+
+-   If the **trend appears overly simplistic**, **adjusting changepoint settings** (`n_changepoints`, `changepoint_prior_scale`) can help capture structural shifts more effectively.
+-   The **widening confidence intervals** suggest increased uncertainty—this could be reduced by incorporating **external regressors** (e.g., economic indicators, interest rates).
+-   If **saturation is expected**, transitioning to a **logistic model with defined upper and lower limits (cap and floor)** would **improve realism** in long-term forecasting. - If long-term saturation is expected, **switching to a logistic model with a cap and floor would help impose a more realistic constraint.**
+
+**Assessing Seasonality in the Model**
+
+```{r warning=FALSE, message=FALSE}
+# Extract seasonal components from the fitted model
+seasonality_components <- components(prophet_model_logistic)
+
+# Plot decomposition of trend, seasonality, and residuals
+autoplot(seasonality_components) +
+  labs(title = "Decomposition of Time-Series Components",
+       x = "Date", y = "Construction Spending") +
+  theme_minimal(base_size = 10)
+
+```
+
+**Observations on Seasonality in the Model:**
+
+1.  **Trend Component**
+
+-   The **trend component** shows a **steady upward trajectory** in construction spending, with occasional shifts in growth rate.
+-   There is **no evidence of a plateau**, suggesting **sustained long-term growth** in the sector.
+-   Certain **trend shifts (changepoints) may require further analysis** to determine if they correspond to external economic factors or modeling artifacts.
+
+2.  **Seasonality Component**
+
+-   The model successfully captures **yearly seasonality**, as reflected in the **recurring cyclical pattern**.
+-   The **multiplicative seasonality assumption** suggests that **seasonal fluctuations grow in magnitude as the trend increases**, rather than remaining constant.
+-   This makes sense for **economic indicators like construction spending**, where periods of high investment result in **larger seasonal variations** over time.
+-   The periodic nature implies that **certain months experience consistently higher or lower spending**, likely due to **business cycles, weather patterns, or regulatory deadlines**.
+
+3.  **Residual Component (Unexplained Variability)**
+
+-   The **residuals appear stable overall**, but increased fluctuations in **recent years** suggest potential external shocks.
+-   These fluctuations could be attributed to **macroeconomic conditions, policy shifts, or industry-specific disruptions**.
+-   If **certain periods exhibit high variance**, additional explanatory variables such as **holidays, economic indicators, or special events** could improve the model's predictive accuracy.
+
+4.  **Additive vs. Multiplicative Seasonality**\
+
+-   The model assumes **multiplicative seasonality**, which is more appropriate when **seasonal variations scale with the trend** rather than remaining constant.
+-   If seasonal effects were **fixed in absolute magnitude**, an **additive model** would be more suitable.
+-   Based on observed patterns, **multiplicative seasonality is the better choice** for this dataset, as it **better reflects economic reality**, where **seasonal variations tend to intensify as overall spending grows**.
+
+```{r warning=FALSE, message=FALSE}
+# Compare Additive vs. Multiplicative Seasonality
+prophet_additive <- construction_spending %>%
+  model(Prophet = prophet(construction_spending ~ season(period = "year", type = "additive", order = 6)))
+
+prophet_multiplicative <- construction_spending %>%
+  model(Prophet = prophet(construction_spending ~ season(period = "year", type = "multiplicative", order = 6)))
+
+glance(prophet_additive)
+glance(prophet_multiplicative)
+# Extract seasonality components
+additive_components <- components(prophet_additive)
+multiplicative_components <- components(prophet_multiplicative)
+
+# Plot comparison
+autoplot(additive_components) +
+  labs(title = " Additive Seasonality Components")
+
+autoplot(multiplicative_components) +
+  labs(title = "  Multiplicative Seasonality Components")
+
+```
+
+**Seasonality Analysis**
+
+1.  **Comparison: Additive vs. Multiplicative Seasonality**
+
+-   The **additive seasonality model** assumes that **seasonal fluctuations remain constant over time** regardless of trend growth.
+    -   The **seasonal component remains uniform**, meaning **each seasonal peak or trough is similar in magnitude**.
+    -   **Residual variability is higher**, indicating that the model may not **fully capture** the seasonal dynamics.
+-   The **multiplicative seasonality model** assumes that **seasonal effects grow proportionally with the trend**.
+    -   The decomposition suggests that **higher spending leads to larger seasonal fluctuations**, aligning with real-world economic behavior.
+    -   The **lower sigma value (3556.545 vs. 3960.338 for additive)** suggests a **better overall model fit**, as fewer unexplained variations remain.
+
+2.  **Final Interpretation**
+
+-   The strong **yearly seasonality component** indicates that **seasonality should be incorporated into the model**.
+-   The **multiplicative seasonality model outperforms the additive model**, as evidenced by **lower residual variability** and **better alignment with trend dynamics**.
+-   Since the dataset is **monthly**, there is **no need to introduce daily or weekly seasonal components** unless additional high-frequency data is available.
+-   **Holidays and special events** could be included as regressors if there is a **consistent impact on construction spending**, such as **end-of-year budget allocations** or **seasonal slowdowns** due to weather conditions.
+
+```{r warning=FALSE, message=FALSE}
+# Generate forecasts for the next 12 months
+forecast_additive <- prophet_additive %>% forecast(h = "12 months")
+forecast_multiplicative <- prophet_multiplicative %>% forecast(h = "12 months") 
+```
+
+```{r warning=FALSE, message=FALSE}
+
+# Load required library
+library(ggplot2)
+
+# Create a combined plot for both models
+ggplot() +
+  # Actual data
+  geom_line(data = construction_spending, aes(x = yearmonth, y = construction_spending), 
+            color = "black", size = 1.1, alpha = 0.7) +
+  
+  # Additive Forecast (Blue)
+  geom_line(data = forecast_additive, aes(x = yearmonth, y = .mean, color = "Additive"), 
+            size = 1.2, linetype = "dashed") +
+  
+  # Multiplicative Forecast (Orange)
+  geom_line(data = forecast_multiplicative, aes(x = yearmonth, y = .mean, color = "Multiplicative"), 
+            size = 1.2, linetype = "dashed") +
+  
+  # Titles and labels
+  ggtitle(" Additive vs. Multiplicative Seasonality Forecast") +
+  xlab("Date") +
+  ylab("Construction Spending ($)") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(color = "black"),
+    panel.grid.major = element_line(color = "grey85"),
+    panel.grid.minor = element_blank()
+  ) +
+  scale_color_manual(name = "Forecast Type", values = c("Additive" = "blue", "Multiplicative" = "red")) +
+  labs(color = "Seasonality Model")
+
+```
+
+**Observations for Additive vs. Multiplicative Seasonality Forecast**
+
+1.  **Additive Model (Blue):**
+    -   The **seasonal fluctuations remain constant** throughout the timeline, meaning the model assumes that **seasonal effects do not change in magnitude** as the trend increases.
+    -   This assumption is **less realistic** for datasets where seasonality tends to **grow along with the trend**.
+    -   Forecasted values appear to **slightly underestimate peaks and overestimate troughs**, suggesting that **seasonality is not being modeled correctly**.
+2.  **Multiplicative Model (Red):**
+    -   The **seasonal variations scale with the trend**, meaning that as construction spending increases, **seasonal fluctuations also become larger**.
+    -   This model better captures **real-world economic patterns**, where seasonal effects often **intensify during high-growth periods**.
+    -   The forecast closely follows the **historical pattern**, showing **a better overall fit compared to the additive model**.
+3.  **Comparison & Final Interpretation:**
+    -   The **multiplicative model aligns more closely with actual data**, as seen in the final forecast plot.
+    -   The **additive model may be too simplistic** to capture large variations in later years.
+    -   If the dataset had **smaller relative fluctuations**, the additive model might have been sufficient. However, in this case, the **multiplicative model is the better choice** due to the increasing magnitude of seasonal effects.
+
+```{r warning=FALSE, message=FALSE}
+
+# Determine split point (80% train, 20% test)
+n <- nrow(construction_spending)
+split_point <- floor(n * 0.8)  
+
+# Create training and test sets
+train_data <- construction_spending %>% slice(1:split_point)
+test_data <- construction_spending %>% slice((split_point + 1):n)
+
+# Fit models with different seasonality and trend assumptions
+prophet_linear_additive <- train_data %>%
+  model(Prophet = prophet(construction_spending ~ growth("linear") + 
+                          season(period = "year", type = "additive", order = 6)))
+
+prophet_linear_multiplicative <- train_data %>%
+  model(Prophet = prophet(construction_spending ~ growth("linear") + 
+                          season(period = "year", type = "multiplicative", order = 6)))
+
+prophet_logistic_additive <- train_data %>%
+  model(Prophet = prophet(construction_spending ~ growth("logistic", cap = cap, floor = floor) + 
+                          season(period = "year", type = "additive", order = 6)))
+
+prophet_logistic_multiplicative <- train_data %>%
+  model(Prophet = prophet(construction_spending ~ growth("logistic", cap = cap, floor = floor) + 
+                          season(period = "year", type = "multiplicative", order = 6)))
+
+# Generate forecasts for each model
+forecast_linear_additive <- prophet_linear_additive %>% forecast(new_data = test_data)
+forecast_linear_multiplicative <- prophet_linear_multiplicative %>% forecast(new_data = test_data)
+forecast_logistic_additive <- prophet_logistic_additive %>% forecast(new_data = test_data)
+forecast_logistic_multiplicative <- prophet_logistic_multiplicative %>% forecast(new_data = test_data)
+
+# Evaluate accuracy for all models
+accuracy_results <- bind_rows(
+  accuracy(forecast_linear_additive, test_data) %>% mutate(Model = "Linear + Additive"),
+  accuracy(forecast_linear_multiplicative, test_data) %>% mutate(Model = "Linear + Multiplicative"),
+  accuracy(forecast_logistic_additive, test_data) %>% mutate(Model = "Logistic + Additive"),
+  accuracy(forecast_logistic_multiplicative, test_data) %>% mutate(Model = "Logistic + Multiplicative")
+)
+
+# Display results in a formatted table
+accuracy_results %>%
+  select(Model, RMSE, MAE, MAPE) %>%
+  arrange(RMSE) %>%
+  gt() %>%
+  tab_header(title = "Model Performance Comparison (Test Set)") %>%
+  fmt_number(columns = c(RMSE, MAE, MAPE), decimals = 2)
+
+```
+
+**Model Performance Comparison: Prophet Variants**
+
+-   **Linear Growth Models Perform Better:**
+    -   The **Linear + Multiplicative** model achieved the lowest RMSE and MAE, making it the best-performing model.
+    -   The **Linear + Additive** model performed similarly, with a slightly lower MAPE, indicating marginally better percentage error handling.
+-   **Logistic Growth Models Perform Poorly:**
+    -   Both **Logistic** models yielded **significantly higher RMSE and MAE** values, with RMSE values **almost double** those of the linear models.
+-   The **Linear + Multiplicative Prophet model** is the best choice for final forecasting, given its lowest RMSE and MAE.
+
+```{r}
+# Plot actual vs. predicted values for the best model
+best_forecast <- forecast_linear_multiplicative  # Replace with best model from RMSE table
+
+autoplot(best_forecast, train_data) +
+  labs(title = " Best Model Forecast vs. Actual Data",
+       x = "Date", y = "Construction Spending") +
+  theme_minimal()
+
+```
+
+**Best Model Forecast vs. Actual Data**
+
+-   The **Linear + Multiplicative Prophet model** effectively captures both the long-term trend and seasonal fluctuations in construction spending.
+-   The **forecasted values follow the expected seasonal patterns**, with increasing variability over time, reflected in the widening confidence intervals.
+-   The **80% and 95% prediction intervals (shaded regions) expand over time**, indicating increased uncertainty further into the forecast horizon.
+-   The **model projects a continued upward trend**, with noticeable seasonal spikes, aligning with historical patterns.
+-   The model provides a **reasonably accurate short-term forecast** but **should be updated regularly** with new data to maintain reliability.
+-   The **Linear + Multiplicative structure** is effective for capturing seasonal variations in construction spending.
+
+# **Section 4 - Model Comparison and Validation**
+
+```{r}
+library(ggplot2)       # For autoplot
+library(fable)         # For forecasting models
+library(fabletools)    # Required for autoplot on fable models
+library(tsibble)       # Time series data handling
+library(feasts)        # For additional time series features
+
+cv_results <- train_data %>%
+  stretch_tsibble(.init = 24, .step = 6) %>%
+  model(
+    best_arima = ARIMA(construction_spending ~ pdq(1,1,1) + PDQ(1,1,1,12)),
+    naive_model = NAIVE(construction_spending),
+    Prophet = prophet(
+      construction_spending ~ growth("linear", 
+                                     changepoint_prior_scale = 0.05, 
+                                     n_changepoints = 10) +  
+                           season(period = "year", type = "multiplicative", order = 6)
+    )
+  ) %>%
+  forecast(h = "12 months") %>%
+  accuracy(test_data)
+
+# Display rolling cross-validation results
+cv_results %>%
+  arrange(RMSE) %>%
+  gt() %>%
+  tab_header(title = "Rolling Cross-Validation Results") %>%
+  fmt_number(columns = c(RMSE, MAE, MAPE), decimals = 2)
+
+```
+
+**Rolling Cross-Validation Results**
+
+-   **ARIMA(1,1,1)(1,1,1)\[12\] performed the best**, achieving the lowest RMSE (3,394.10) and MAE (2,930.94).
+-   **Prophet model had a slightly higher RMSE (4,616.93) and MAE (3,611.95)** but was still a reasonable alternative.
+-   **Naïve model performed significantly worse**, with an RMSE of 13,188.66, indicating that more advanced forecasting methods are necessary.
+-   **ACF1 values indicate some residual autocorrelation**, particularly in ARIMA and Prophet models, but values remain below 0.72, suggesting reasonable model behavior.
+-   The **ARIMA model is the best-performing approach** for this dataset.
+-   The **Prophet model can be considered as an alternative**, though with slightly higher error.
+-   The **naïve model is not suitable for forecasting construction spending**, as it lacks predictive power.
+
+```{r}
+library(fable)
+library(fable.prophet)  # For Prophet model integration
+library(feasts)
+library(tidyverse)
+# Ensure CV splits have a complete time index
+cv_splits <- train_data %>%
+  stretch_tsibble(.init = 150, .step = 6) %>%
+  fill_gaps()  # Fills in any missing periods
+
+# Fit models on each CV fold and forecast 6 periods ahead
+cv_forecasts <- cv_splits %>%
+  model(
+    naive   = NAIVE(construction_spending),
+    arima   = ARIMA(construction_spending ~ pdq(1,1,1) + PDQ(1,1,1,12)),
+    prophet = prophet(
+      construction_spending ~ growth("linear", 
+                                     changepoint_prior_scale = 0.05, 
+                                     n_changepoints = 10) +  
+                           season(period = "year", type = "multiplicative", order = 6))
+  ) %>%
+  forecast(h = 6)
+
+# Visualize the forecasts for each fold
+autoplot(cv_forecasts, cv_splits) +
+  facet_wrap(~.id, nrow = 4) +
+  labs(title = "CV Forecasts: Naive vs. ARIMA vs. Prophet",
+       y = "Construction Spending") +
+  theme_minimal()
+
+```
+
+**Cross-Validation Forecasts: Naïve vs. ARIMA vs. Prophet**
+
+-   **ARIMA consistently outperforms the other models across different CV folds.** Its forecasts align well with historical trends, showing the lowest error.
+-   **Prophet exhibits strong seasonality capture**, but in some folds, it slightly overestimates or underestimates trends.
+-   **The naïve model is clearly the weakest**, as it fails to account for seasonal variations and long-term trends.
+-   **Confidence intervals (80% and 95%) are tightest for ARIMA**, suggesting it provides the most stable and reliable forecasts.
+
+```{r}
+# Optional: Plot forecasts for a specific fold (e.g., fold 1)
+cv_forecasts %>% 
+  filter(.id == 1) %>%
+  autoplot(cv_splits) +
+  labs(title = "CV Forecast for Fold 1",
+       x = "Year-Month",
+       y = "Construction Spending") +
+  theme_minimal()
+
+# Optional: Plot forecasts for a specific fold (e.g., fold 10)
+cv_forecasts %>% 
+  filter(.id == 10) %>%
+  autoplot(cv_splits) +
+  labs(title = "CV Forecast for Fold 10",
+       x = "Year-Month",
+       y = "Construction Spending") +
+  theme_minimal()
+```
+
+**Cross-Validation Forecasts: Naive vs. ARIMA vs. Prophet**
+
+1.  **Model Comparison Across Folds:**
+
+    -   Each panel represents a different cross-validation fold, showing how the models perform over different segments of the dataset.
+    -   The **ARIMA model (red)** consistently provides a tighter forecast range and aligns well with historical trends.
+    -   The **Prophet model (blue)** exhibits slightly more variability in its forecasts, particularly in later folds.
+    -   The **Naïve model (green)** struggles to adapt to trend shifts, resulting in wider uncertainty intervals.
+
+2.  **Fold-Specific Performance:**
+
+    -   **Fold 1:** Forecasts have higher uncertainty due to early-stage data limitations.
+    -   **Fold 10:** Predictions stabilize, with the ARIMA and Prophet models closely tracking trends, while the Naïve model underperforms.
+
+    ```{r}
+    library(fable)
+    library(fabletools)
+    library(dplyr)
+    library(ggplot2)
+    library(gt)
+
+    # Fit only the best model on train data
+    best_model <- train_data %>%
+      model(
+        best_arima = ARIMA(construction_spending ~ pdq(1,1,1) + PDQ(1,1,1,12))
+      )
+
+    # Generate forecasts for the test set
+    best_forecast <- best_model %>%
+      forecast(h = nrow(test_data))  # Forecast for test set length
+
+    # Compute accuracy metrics
+    best_model_accuracy <- best_forecast %>%
+      accuracy(test_data)
+
+    # Display results in a table
+    best_model_accuracy %>%
+      arrange(RMSE) %>%
+      gt() %>%
+      tab_header(title = "Performance of Best Model on Test Set") %>%
+      fmt_number(columns = c(RMSE, MAE, MAPE), decimals = 2)
+
+    ```
+
+    The **best ARIMA model demonstrates strong predictive accuracy**, effectively capturing seasonal patterns with a **MAPE of 14.51%** and **RMSE of 12,460.60**. Its stable performance makes it highly reliable for future forecasting and strategic decision-making in construction spending.
+
+    ```{r}
+    # Plot the best model forecast against actual test set values
+    ggplot() +
+      geom_line(data = train_data, aes(x = yearmonth, y = construction_spending), color = "black") +
+      geom_line(data = test_data, aes(x = yearmonth, y = construction_spending), color = "blue") +
+      geom_line(data = best_forecast, aes(x = yearmonth, y = .mean), color = "red", linetype = "dashed") +
+      labs(
+        title = "Best Model Forecast vs. Actuals",
+        x = "Year-Month",
+        y = "Construction Spending",
+        color = "Legend"
+      ) +
+      theme_minimal() +
+      theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+    ```
+
+    ### Best Model Forecast vs. Actuals
+
+The **best ARIMA model** closely tracks historical trends and seasonal patterns in construction spending. The **forecast (red dashed line)** maintains seasonal fluctuations, indicating the model’s robustness in capturing recurring patterns. The alignment between actuals and forecasts suggests a **strong predictive performance** with minimal deviation.
+
+```{r}
+library(fable)
+library(fabletools)
+library(ggplot2)
+library(gt)
+
+# Combine train and test data
+full_data <- bind_rows(train_data, test_data)
+# Fit the best model to the full dataset
+final_model <- full_data %>%
+  model(
+    best_arima = ARIMA(construction_spending ~ pdq(1,1,1) + PDQ(1,1,1,12))
+  )
+
+# Generate forecasts for the next 12 months
+final_forecast <- final_model %>%
+  forecast(h = "12 months")
+
+# Display forecasted values in a table
+final_forecast %>%
+  arrange(yearmonth) %>%
+  gt() %>%
+  tab_header(title = "12-Month Forecast Using Best Model")
+
+```
+
+**12-Month Forecast Using Best Model**
+
+The **ARIMA(1,1,1)(1,1,1)\[12\] model** predicts a steady increase in construction spending over the next year, with seasonal fluctuations maintained. The **forecasted values exhibit an upward trend**, peaking around mid-2025 before a slight decline. The model provides **reasonable confidence intervals**, ensuring robust predictive insights.
+
+```{r}
+    autoplot(final_forecast, full_data) +
+      labs(title = "Final Forecast on Test Set", 
+           y = "Construction Spending", 
+           x = "Year-Month") +
+      theme_minimal() +
+  theme(panel.grid = element_blank())
+```
+
+**Final Forecast on Test Set**
+
+The **ARIMA(1,1,1)(1,1,1)\[12\] model** effectively captures the seasonal and trend components of construction spending. The forecast continues the observed upward trend, with seasonal fluctuations well preserved. The **confidence intervals remain narrow** in the short term, suggesting strong predictive accuracy. Overall, the model demonstrates **robust performance** for future projections.
+
+**Discussion of Forecast and Potential Issues**
+
+The **ARIMA(1,1,1)(1,1,1)\[12\] model** provides a strong forecast that aligns well with historical trends and seasonality, making it a reliable choice for short-term predictions. However, a few potential issues should be considered:
+
+1.  **Increasing Uncertainty Over Time** – The confidence intervals widen as the forecast horizon extends, indicating greater uncertainty in long-term predictions.
+2.  **Structural Changes** – The model assumes past patterns will continue, but sudden economic shifts, policy changes, or industry disruptions may impact future spending trends.
+3.  **Potential Overfitting** – The model is optimized for past data, but if unseen patterns emerge, its accuracy may decline.
+4.  **Stationarity Assumption** – While differencing and transformations ensure stationarity, any future deviations from this assumption could reduce forecast reliability.
+
+Despite these considerations, the model remains a **robust and practical tool for short-term planning**, with well-captured seasonality and trend.
