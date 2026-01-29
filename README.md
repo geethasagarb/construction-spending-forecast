@@ -24,22 +24,6 @@ Construction spending is a key economic indicator reflecting infrastructure inve
 
 ---
 
-## Repository Structure
-
-forecasting-us-construction-spending/
-├── README.md
-├── data/
-│   └── construction_spending.csv
-├── src/
-│   └── load_libraries.R
-├── reports/
-│   ├── construction_spending_forecast.qmd
-│   ├── construction_spending_forecast.html
-│   ├── figure-html/
-│   └── libs/
-
----
-
 ## Methodology
 
 ### 1. Exploratory Data Analysis (EDA)
