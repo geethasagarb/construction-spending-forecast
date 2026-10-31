@@ -1,4 +1,4 @@
-## Forecasting U.S. Construction Spending
+# Forecasting U.S. Construction Spending
 
 A time-series forecasting project analyzing **Total Construction Spending in the United States** using classical statistical models and Meta Prophet, with rigorous validation and model comparison.
 
