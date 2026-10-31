@@ -1,9 +1,8 @@
-## Forecasting U.S. Construction Spending
+# Forecasting U.S. Construction Spending
 
 A time-series forecasting project analyzing **Total Construction Spending in the United States** using classical statistical models and Meta Prophet, with rigorous validation and model comparison.
 
-🔗 **Published Report (RPubs):**  
-http://rpubs.com/GeethaSGR/1278652
+🔗 **Published report (RPubs):** [rpubs.com/GeethaSGR/1278652](https://rpubs.com/GeethaSGR/1278652)
 
 ---
 
@@ -21,6 +20,8 @@ This project focuses on understanding historical patterns and forecasting future
 - **Observations:** 275
 
 Construction spending is a key economic indicator reflecting infrastructure investment, housing activity, and broader economic conditions.
+
+![Monthly construction spending over time](reports/figure-html/unnamed-chunk-1-1.png)
 
 ---
 
@@ -66,6 +67,8 @@ Construction spending is a key economic indicator reflecting infrastructure inve
   - RMSE ≈ 12,461
 - 12-month forecast preserves trend and seasonality, with uncertainty increasing over the forecast horizon
 
+![12-month ARIMA forecast with 80% and 95% intervals](reports/figure-html/unnamed-chunk-49-1.png)
+
 ---
 
 ## Tools & Technologies
@@ -86,4 +89,6 @@ Construction spending is a key economic indicator reflecting infrastructure inve
 ## Author
 **Geetha Sagar Bonthu**  
 MS Business Analytics — University of Cincinnati
-Licensed under the MIT License
+
+## License
+Licensed under the [MIT License](LICENSE).
