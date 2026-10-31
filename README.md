@@ -21,6 +21,8 @@ This project focuses on understanding historical patterns and forecasting future
 
 Construction spending is a key economic indicator reflecting infrastructure investment, housing activity, and broader economic conditions.
 
+![Monthly construction spending over time](reports/figure-html/unnamed-chunk-1-1.png)
+
 ---
 
 ## Methodology
@@ -64,6 +66,8 @@ Construction spending is a key economic indicator reflecting infrastructure inve
   - MAPE ≈ 14.5%
   - RMSE ≈ 12,461
 - 12-month forecast preserves trend and seasonality, with uncertainty increasing over the forecast horizon
+
+![Final ARIMA forecast on the test set with 80% and 95% intervals](reports/figure-html/unnamed-chunk-49-1.png)
 
 ---
 
