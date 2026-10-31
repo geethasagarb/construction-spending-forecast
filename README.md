@@ -67,7 +67,7 @@ Construction spending is a key economic indicator reflecting infrastructure inve
   - RMSE ≈ 12,461
 - 12-month forecast preserves trend and seasonality, with uncertainty increasing over the forecast horizon
 
-![Final ARIMA forecast on the test set with 80% and 95% intervals](reports/figure-html/unnamed-chunk-49-1.png)
+![12-month ARIMA forecast with 80% and 95% intervals](reports/figure-html/unnamed-chunk-49-1.png)
 
 ---
 
